@@ -8,7 +8,7 @@ import { webhookSubscriptionInputBody } from './webhooks.js';
 type SdkResult = Promise<{ data?: unknown; error?: unknown; response?: Response }>;
 
 /** Any generated SDK function, e.g. `sdk.getDealById`. */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// biome-ignore lint/suspicious/noExplicitAny: must accept every generated SDK function's options type; ToolSpec narrows it per operation.
 type AnySdkFn = (options: any) => SdkResult;
 
 /** The request options (`path`, `query`, `body`, …) of a generated SDK function. */

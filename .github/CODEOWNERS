@@ -1,0 +1,3 @@
+# Maintainers own everything; a code owner's approval is required to merge
+# when the repository ruleset requires code owner review.
+* @matthiasbruns

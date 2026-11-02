@@ -6,6 +6,7 @@
 npm install
 npm test             # unit + MCP integration tests (mocked HTTP)
 npm run typecheck
+npm run lint         # Biome
 npm run build        # → dist/
 ```
 
@@ -33,3 +34,14 @@ Run the server locally with the [MCP Inspector](https://github.com/modelcontextp
 ```sh
 npm run build && SALESSUITE_API_KEY=… npx @modelcontextprotocol/inspector node dist/index.js
 ```
+
+## Pull requests and releases
+
+PRs are squash-merged, and the PR title becomes the commit message on `main`. Use a
+[Conventional Commit](https://www.conventionalcommits.org) title: `feat:` (minor bump while 0.x), `fix:` (patch), `perf:`,
+`refactor:`, `docs:`; `chore:`, `ci:`, `test:`, `build:` and `style:` are left out of the release notes. Mark breaking
+changes with `!` (e.g. `feat!: rename tools`).
+
+To release, run **Actions → Release → Run workflow** on `main` (bump `auto`, or force `patch` / `minor` / `major`) and
+approve the `release` environment. [git-cliff](https://git-cliff.org) (`cliff.toml`) computes the version and the
+release notes from the PR titles since the last tag; the workflow publishes to npm and creates the tag and GitHub release.

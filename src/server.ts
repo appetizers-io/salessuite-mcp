@@ -123,7 +123,7 @@ export async function callTool(client: Client, def: ToolDefinition, args: Record
   }
 
   const { response, data, error } = result;
-  if (!response || !response.ok || error !== undefined) {
+  if (!response?.ok || error !== undefined) {
     if (!response) return errorResult(`Request to SalesSuite failed: ${formatError(error)}`);
     return errorResult(`SalesSuite API error: HTTP ${response.status} ${response.statusText}${statusHint(response)}\n${formatError(error)}`);
   }

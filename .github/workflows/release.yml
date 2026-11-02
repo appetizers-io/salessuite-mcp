@@ -1,69 +1,140 @@
-# Publishes to npm via trusted publishing (OIDC, no token): https://docs.npmjs.com/trusted-publishers
-# Release: `npm version <patch|minor|major>` on main, then push the commit and tag (`git push --follow-tags`).
 name: Release
 
-on:
-  push:
-    tags: ['v*']
+# Run by hand (Actions → Release → Run workflow) on main. git-cliff
+# (cliff.toml) picks the next version from the Conventional Commit titles since
+# the last tag (feat: minor, fix: patch), or the bump you choose, and writes the
+# release notes.
+#
+# Two jobs, so that no dependency code ever runs with the npm publishing
+# credential: `verify` installs, tests, sets the version (build only, never
+# committed) and packs the tarball with read-only permissions; `publish` gets
+# id-token: write (npm trusted publishing, OIDC) but only publishes that
+# tarball with scripts disabled and creates the tag and GitHub release.
 
-# One group per tag: a shared group would cancel pending runs when several tags are pushed at once.
-concurrency:
-  group: release-${{ github.ref_name }}
-  cancel-in-progress: false
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version bump
+        type: choice
+        options: [auto, patch, minor, major]
+        default: auto
 
 permissions:
   contents: read
 
-jobs:
-  ci:
-    uses: ./.github/workflows/ci.yml
+concurrency:
+  group: salessuite-mcp-publication
+  cancel-in-progress: false
 
-  publish:
-    needs: ci
-    # Trusted publishing requires GitHub-hosted runners.
+jobs:
+  verify:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     permissions:
       contents: read
+    outputs:
+      version: ${{ steps.cliff.outputs.version }}
+      tarball: ${{ steps.pack.outputs.tarball }}
+      name: ${{ steps.pack.outputs.name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false # a release must not build from a cache other runs can write
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run generate:check
+      - run: npm run typecheck
+      - run: npm test
+      - name: git-cliff arguments
+        id: args
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: |
+          bump=$([ "$BUMP" = auto ] && echo "--bump" || echo "--bump $BUMP")
+          echo "args=--unreleased $bump --strip all -o $RUNNER_TEMP/release/RELEASE_NOTES.md" >> "$GITHUB_OUTPUT"
+          mkdir -p "$RUNNER_TEMP/release"
+      - name: Next version and release notes
+        id: cliff
+        uses: orhun/git-cliff-action@a9a95522b26fe6403f7bb24031f21fb573d0f5ff # v4.9.1
+        with:
+          version: v2.14.2
+          args: ${{ steps.args.outputs.args }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # PR links and authors (read-only)
+      - name: Check version
+        env:
+          VERSION: ${{ steps.cliff.outputs.version }}
+        run: |
+          if [ -z "$VERSION" ] || [ "$VERSION" = null ] || git rev-parse -q --verify "refs/tags/$VERSION" >/dev/null; then
+            echo "::error::nothing to release (version: $VERSION)"; exit 1
+          fi
+          echo "Releasing $VERSION" >> "$GITHUB_STEP_SUMMARY"
+          cat "$RUNNER_TEMP/release/RELEASE_NOTES.md" >> "$GITHUB_STEP_SUMMARY"
+      - name: Set version (build only, not committed)
+        env:
+          VERSION: ${{ steps.cliff.outputs.version }}
+        run: npm version "${VERSION#v}" --no-git-tag-version --allow-same-version
+      - run: npm run build
+      - name: Pack
+        id: pack
+        run: |
+          tarball="$(npm pack --ignore-scripts --pack-destination "$RUNNER_TEMP/release" | tail -1)"
+          echo "tarball=$tarball" >> "$GITHUB_OUTPUT"
+          echo "name=$(node -p "require('./package.json').name")" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release
+          path: ${{ runner.temp }}/release/
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    needs: verify
+    # Trusted publishing requires GitHub-hosted runners.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: release # main only; maintainers approve the run
+    permissions:
+      contents: write # create the tag and the release
       id-token: write # npm trusted publishing
     steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/setup-node@v7
+      # No checkout, no npm ci, no build: nothing from the dependency tree runs in this job.
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release
+          path: ${{ runner.temp }}/release
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
-
-      - name: Tag matches package.json version
-        run: |
-          version="$(node -p "require('./package.json').version")"
-          if [ "v${version}" != "${GITHUB_REF_NAME}" ]; then
-            echo "::error::Tag ${GITHUB_REF_NAME} does not match package.json version ${version}"
-            exit 1
-          fi
-
-      - name: npm >= 11.5.1 (required for trusted publishing; provenance is generated automatically for public repos)
+      - name: npm >= 11.5.1 (required for trusted publishing)
         run: |
           npm --version
-          node -e "const [a,b,c]=process.argv[1].split('.').map(Number); process.exit(a>11||(a===11&&(b>5||(b===5&&c>=1)))?0:1)" "$(npm --version)" || npm install -g npm@11
-
-      - run: npm ci
-      - run: npm run build
-
+          node -e "const [a,b,c]=process.argv[1].split('.').map(Number); process.exit(a>11||(a===11&&(b>5||(b===5&&c>=1)))?0:1)" "$(npm --version)" || npm install -g --ignore-scripts npm@11
+      # Skipped when this version is already on npm, so a run that failed after
+      # publishing (e.g. creating the release) can simply be re-run.
       - name: Publish to npm
-        run: npm publish --access public
-
-  # Separate job so it can be re-run without publishing the same npm version again.
-  github-release:
-    needs: publish
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      contents: write
-    steps:
-      - name: GitHub release
         env:
-          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.verify.outputs.version }}
+          NAME: ${{ needs.verify.outputs.name }}
+          TARBALL: ${{ needs.verify.outputs.tarball }}
+        run: |
+          if npm view "${NAME}@${VERSION#v}" version >/dev/null 2>&1; then
+            echo "::notice::${NAME}@${VERSION#v} is already published; skipping"
+          else
+            npm publish "$RUNNER_TEMP/release/$TARBALL" --access public --ignore-scripts
+          fi
+      - name: Tag and GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
-        run: gh release create "${GITHUB_REF_NAME}" --generate-notes --verify-tag
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: gh release create "$VERSION" --target "$GITHUB_SHA" --title "$VERSION" --notes-file "$RUNNER_TEMP/release/RELEASE_NOTES.md"
