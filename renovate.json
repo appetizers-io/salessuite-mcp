@@ -1,6 +1,16 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
-    "config:recommended"
+  "extends": ["config:recommended"],
+  "packageRules": [
+    {
+      "description": "@hey-api/openapi-ts uses the TypeScript compiler JS API, which TypeScript 7 (native port) does not ship.",
+      "matchPackageNames": ["typescript"],
+      "allowedVersions": "<7"
+    },
+    {
+      "description": "Regenerate src/generated (npm run generate) when updating the code generator.",
+      "matchPackageNames": ["@hey-api/openapi-ts"],
+      "prBodyNotes": ["Run `npm run generate` and commit `src/generated` if the output changed; CI fails otherwise."]
+    }
   ]
 }

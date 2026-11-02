@@ -12,8 +12,11 @@ Create an API key in SalesSuite (*Settings > General*) and add the server to you
 **Claude Code**
 
 ```sh
-claude mcp add salessuite --env SALESSUITE_API_KEY=your-api-key -- npx -y salessuite-mcp
+claude mcp add salessuite --scope user --env SALESSUITE_API_KEY=your-api-key -- npx -y salessuite-mcp
 ```
+
+Keep the `--` before `npx`: without it, `--env` also swallows the command and the server is registered without
+arguments (it then hangs on "connecting"). `--scope user` makes it available in every project.
 
 **Claude Desktop / Cursor / other clients** (`claude_desktop_config.json`, `.cursor/mcp.json`, …)
 
@@ -96,8 +99,24 @@ SALESSUITE_API_KEY=… npm run test:live                          # read-only
 SALESSUITE_API_KEY=… SALESSUITE_LIVE_WRITE=1 npm run test:live  # also creates a test contact (contacts cannot be deleted via the API)
 ```
 
+### Releasing
+
+Releases are published to npm by `.github/workflows/release.yml` via
+[trusted publishing](https://docs.npmjs.com/trusted-publishers) (OIDC, no npm token):
+
+```sh
+npm version patch   # or minor / major: bumps package.json, commits, tags vX.Y.Z
+git push --follow-tags
+```
+
+The workflow runs CI, checks that the tag matches `package.json`, publishes to npm and creates a GitHub release.
+
 Run the server locally with the [MCP Inspector](https://github.com/modelcontextprotocol/inspector):
 
 ```sh
 npm run build && SALESSUITE_API_KEY=… npx @modelcontextprotocol/inspector node dist/index.js
 ```
+
+## License
+
+[MIT](LICENSE)

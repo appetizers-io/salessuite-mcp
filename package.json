@@ -2,13 +2,20 @@
   "name": "salessuite-mcp",
   "version": "0.1.0",
   "description": "MCP server for the SalesSuite CRM API (contacts, deals, notes, calls, emails, webhooks). Only needs an API key.",
+  "license": "MIT",
+  "author": "Appetizer Labs UG (haftungsbeschränkt)",
+  "homepage": "https://github.com/appetizers-io/salessuite-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/appetizers-io/salessuite-mcp/issues"
+  },
   "type": "module",
   "bin": {
     "salessuite-mcp": "dist/index.js"
   },
   "files": [
     "dist",
-    "openapi"
+    "openapi",
+    "LICENSE"
   ],
   "engines": {
     "node": ">=20"
@@ -21,7 +28,8 @@
     "update-spec": "tsx scripts/update-spec.ts",
     "start": "node dist/index.js",
     "prepublishOnly": "npm run build",
-    "generate": "openapi-ts"
+    "generate": "openapi-ts",
+    "generate:check": "openapi-ts && git diff --exit-code -- src/generated"
   },
   "keywords": [
     "mcp",
