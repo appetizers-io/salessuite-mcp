@@ -71,7 +71,6 @@ contacts, contact persons and deals also accept additional keys. Custom properti
 (e.g. `contact_x_budget`). `list_properties` with `propertyType: "dynamic"` lists them with their value types and select
 options.
 
-<<<<<<< Updated upstream
 ## License
 
 [MIT](LICENSE)
