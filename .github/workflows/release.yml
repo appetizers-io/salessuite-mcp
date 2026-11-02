@@ -48,6 +48,7 @@ jobs:
           node-version-file: .nvmrc
           package-manager-cache: false # a release must not build from a cache other runs can write
       - run: npm ci
+      - run: npm run lint
       - run: npm run generate:check
       - run: npm run typecheck
       - run: npm test

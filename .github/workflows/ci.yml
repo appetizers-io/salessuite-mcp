@@ -1,5 +1,8 @@
 name: CI
 
+# Job ids match the required status checks of the "required checks" ruleset:
+# lint, typecheck, test (ubuntu-latest), test (macos-latest), test (windows-latest).
+
 on:
   pull_request:
     branches: [main]
@@ -14,28 +17,54 @@ permissions:
   contents: read
 
 jobs:
-  test:
-    name: Typecheck, test, build
+  lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - name: Generated client is up to date with openapi/salessuite.openapi.json
+        run: npm run generate:check
+
+  typecheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+
+  # Users run the server via npx on every OS.
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           cache: npm
-
       - run: npm ci
-
-      - name: Generated client is up to date with openapi/salessuite.openapi.json
-        run: npm run generate:check
-
-      - run: npm run typecheck
       - run: npm test
       - run: npm run build
-
       - name: Package contents
         run: npm pack --dry-run

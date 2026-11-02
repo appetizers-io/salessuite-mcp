@@ -6,6 +6,7 @@
 npm install
 npm test             # unit + MCP integration tests (mocked HTTP)
 npm run typecheck
+npm run lint         # Biome
 npm run build        # → dist/
 ```
 
