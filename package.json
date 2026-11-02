@@ -29,7 +29,7 @@
     "start": "node dist/index.js",
     "prepublishOnly": "npm run build",
     "generate": "openapi-ts",
-    "generate:check": "openapi-ts && git diff --exit-code -- src/generated"
+    "generate:check": "openapi-ts && git diff --exit-code -- src/generated && ! git status --porcelain -- src/generated | grep ."
   },
   "keywords": [
     "mcp",

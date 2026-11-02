@@ -6,8 +6,9 @@ on:
   push:
     tags: ['v*']
 
+# One group per tag: a shared group would cancel pending runs when several tags are pushed at once.
 concurrency:
-  group: release
+  group: release-${{ github.ref_name }}
   cancel-in-progress: false
 
 permissions:
@@ -23,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
-      contents: write # GitHub release
+      contents: read
       id-token: write # npm trusted publishing
     steps:
       - uses: actions/checkout@v7
@@ -53,7 +54,16 @@ jobs:
       - name: Publish to npm
         run: npm publish --access public
 
+  # Separate job so it can be re-run without publishing the same npm version again.
+  github-release:
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
       - name: GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         run: gh release create "${GITHUB_REF_NAME}" --generate-notes --verify-tag

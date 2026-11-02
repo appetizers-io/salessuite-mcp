@@ -102,7 +102,16 @@ SALESSUITE_API_KEY=… SALESSUITE_LIVE_WRITE=1 npm run test:live  # also creates
 ### Releasing
 
 Releases are published to npm by `.github/workflows/release.yml` via
-[trusted publishing](https://docs.npmjs.com/trusted-publishers) (OIDC, no npm token):
+[trusted publishing](https://docs.npmjs.com/trusted-publishers) (OIDC, no npm token).
+
+One-time setup before the first automated release:
+
+1. Publish the first version manually as a member of the `appetizers-io` npm org: `npm login && npm publish`
+   (a trusted publisher can only be configured for an existing package).
+2. On npmjs.com, open the package settings → *Trusted publishing* → *GitHub Actions* and enter
+   organization `appetizers-io`, repository `salessuite-mcp`, workflow `release.yml` (no environment); allow `npm publish`.
+
+Every release after that:
 
 ```sh
 npm version patch   # or minor / major: bumps package.json, commits, tags vX.Y.Z
