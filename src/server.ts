@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { McpServer, type CallToolResult } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import type { Client } from './generated/client/index.js';
@@ -6,7 +7,8 @@ import { TOOLS, TOOLSETS, type ToolDefinition, type Toolset } from './tools.js';
 import { describeWebhookEvent, WEBHOOK_EVENT_TYPES } from './webhooks.js';
 
 export const SERVER_NAME = 'salessuite';
-export const SERVER_VERSION = '0.1.0';
+/** Single source of truth for the version: package.json (bumped by `npm version`). */
+export const SERVER_VERSION: string = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
 
 export interface ServerOptions {
   client: Client;
