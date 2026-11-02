@@ -71,61 +71,6 @@ contacts, contact persons and deals also accept additional keys. Custom properti
 (e.g. `contact_x_budget`). `list_properties` with `propertyType: "dynamic"` lists them with their value types and select
 options.
 
-## Development
-
-```sh
-npm install
-npm test             # unit + MCP integration tests (mocked HTTP)
-npm run typecheck
-npm run build        # → dist/
-```
-
-The API client, types and Zod schemas in `src/generated/` are generated with
-[Hey API](https://heyapi.dev) (`@hey-api/openapi-ts`) from `openapi/salessuite.openapi.json`. Do not edit them by hand.
-
-```sh
-npm run generate                                  # regenerate from the committed spec
-SALESSUITE_API_KEY=… npm run update-spec          # download the latest spec (tenant IDs replaced) and regenerate
-```
-
-`src/tools.ts` maps each generated SDK function to its generated Zod schemas; the types are checked against each
-other, so pairing an operation with the wrong schema fails to compile. A test fails when the spec gains an
-operation without a tool.
-
-Live tests against the real API (opt-in):
-
-```sh
-SALESSUITE_API_KEY=… npm run test:live                          # read-only
-SALESSUITE_API_KEY=… SALESSUITE_LIVE_WRITE=1 npm run test:live  # also creates a test contact (contacts cannot be deleted via the API)
-```
-
-### Releasing
-
-Releases are published to npm by `.github/workflows/release.yml` via
-[trusted publishing](https://docs.npmjs.com/trusted-publishers) (OIDC, no npm token).
-
-One-time setup before the first automated release:
-
-1. Publish the first version manually as a member of the `appetizers-io` npm org: `npm login && npm publish`
-   (a trusted publisher can only be configured for an existing package).
-2. On npmjs.com, open the package settings → *Trusted publishing* → *GitHub Actions* and enter
-   organization `appetizers-io`, repository `salessuite-mcp`, workflow `release.yml` (no environment); allow `npm publish`.
-
-Every release after that:
-
-```sh
-npm version patch   # or minor / major: bumps package.json, commits, tags vX.Y.Z
-git push --follow-tags
-```
-
-The workflow runs CI, checks that the tag matches `package.json`, publishes to npm and creates a GitHub release.
-
-Run the server locally with the [MCP Inspector](https://github.com/modelcontextprotocol/inspector):
-
-```sh
-npm run build && SALESSUITE_API_KEY=… npx @modelcontextprotocol/inspector node dist/index.js
-```
-
 ## License
 
 [MIT](LICENSE)
