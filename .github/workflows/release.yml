@@ -1,69 +1,101 @@
-# Publishes to npm via trusted publishing (OIDC, no token): https://docs.npmjs.com/trusted-publishers
-# Release: `npm version <patch|minor|major>` on main, then push the commit and tag (`git push --follow-tags`).
 name: Release
 
-on:
-  push:
-    tags: ['v*']
+# Run by hand (Actions → Release → Run workflow) on main. git-cliff
+# (cliff.toml) picks the next version from the Conventional Commit titles since
+# the last tag (feat: minor, fix: patch), or the bump you choose, and writes the
+# release notes. The version is set in package.json for the build only (never
+# committed), the package is published to npm via trusted publishing (OIDC, no
+# token; provenance is generated for public repositories), and the tag is
+# created together with the GitHub release.
 
-# One group per tag: a shared group would cancel pending runs when several tags are pushed at once.
-concurrency:
-  group: release-${{ github.ref_name }}
-  cancel-in-progress: false
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version bump
+        type: choice
+        options: [auto, patch, minor, major]
+        default: auto
 
 permissions:
   contents: read
 
 jobs:
-  ci:
-    uses: ./.github/workflows/ci.yml
-
-  publish:
-    needs: ci
+  release:
+    concurrency:
+      group: salessuite-mcp-publication
+      cancel-in-progress: false
+    if: github.ref == 'refs/heads/main'
     # Trusted publishing requires GitHub-hosted runners.
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+    outputs:
+      version: ${{ steps.cliff.outputs.version }}
+    environment: release # main only; maintainers approve the run
     permissions:
-      contents: read
+      contents: write # create the tag and the release
       id-token: write # npm trusted publishing
     steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          node-version: 24
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
           registry-url: https://registry.npmjs.org
-          package-manager-cache: false
-
-      - name: Tag matches package.json version
+          package-manager-cache: false # a release must not build from a cache other runs can write
+      - run: npm ci
+      - run: npm run generate:check
+      - run: npm run typecheck
+      - run: npm test
+      - name: git-cliff arguments
+        id: args
+        env:
+          BUMP: ${{ inputs.bump }}
         run: |
-          version="$(node -p "require('./package.json').version")"
-          if [ "v${version}" != "${GITHUB_REF_NAME}" ]; then
-            echo "::error::Tag ${GITHUB_REF_NAME} does not match package.json version ${version}"
-            exit 1
+          bump=$([ "$BUMP" = auto ] && echo "--bump" || echo "--bump $BUMP")
+          echo "args=--unreleased $bump --strip all -o $RUNNER_TEMP/RELEASE_NOTES.md" >> "$GITHUB_OUTPUT"
+      - name: Next version and release notes
+        id: cliff
+        uses: orhun/git-cliff-action@a9a95522b26fe6403f7bb24031f21fb573d0f5ff # v4.9.1
+        with:
+          version: v2.14.2
+          args: ${{ steps.args.outputs.args }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # PR links and authors
+      - name: Check version
+        env:
+          VERSION: ${{ steps.cliff.outputs.version }}
+        run: |
+          if [ -z "$VERSION" ] || [ "$VERSION" = null ] || git rev-parse -q --verify "refs/tags/$VERSION" >/dev/null; then
+            echo "::error::nothing to release (version: $VERSION)"; exit 1
           fi
-
-      - name: npm >= 11.5.1 (required for trusted publishing; provenance is generated automatically for public repos)
+          echo "Releasing $VERSION" >> "$GITHUB_STEP_SUMMARY"
+          cat "$RUNNER_TEMP/RELEASE_NOTES.md" >> "$GITHUB_STEP_SUMMARY"
+      - name: npm >= 11.5.1 (required for trusted publishing)
         run: |
           npm --version
           node -e "const [a,b,c]=process.argv[1].split('.').map(Number); process.exit(a>11||(a===11&&(b>5||(b===5&&c>=1)))?0:1)" "$(npm --version)" || npm install -g npm@11
-
-      - run: npm ci
-      - run: npm run build
-
-      - name: Publish to npm
-        run: npm publish --access public
-
-  # Separate job so it can be re-run without publishing the same npm version again.
-  github-release:
-    needs: publish
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      contents: write
-    steps:
-      - name: GitHub release
+      - name: Set version (build only, not committed)
         env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        run: gh release create "${GITHUB_REF_NAME}" --generate-notes --verify-tag
+          VERSION: ${{ steps.cliff.outputs.version }}
+        run: npm version "${VERSION#v}" --no-git-tag-version --allow-same-version
+      - run: npm run build
+      # Skipped when this version is already on npm, so a run that failed after
+      # publishing (e.g. creating the release) can simply be re-run.
+      - name: Publish to npm
+        env:
+          VERSION: ${{ steps.cliff.outputs.version }}
+        run: |
+          name="$(node -p "require('./package.json').name")"
+          if npm view "${name}@${VERSION#v}" version >/dev/null 2>&1; then
+            echo "::notice::${name}@${VERSION#v} is already published; skipping"
+          else
+            npm publish --access public
+          fi
+      - name: Tag and GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.cliff.outputs.version }}
+        run: gh release create "$VERSION" --target "$GITHUB_SHA" --title "$VERSION" --notes-file "$RUNNER_TEMP/RELEASE_NOTES.md"
