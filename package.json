@@ -30,7 +30,8 @@
     "prepublishOnly": "npm run build",
     "generate": "openapi-ts",
     "generate:check": "openapi-ts && git diff --exit-code -- src/generated && ! git status --porcelain -- src/generated | grep .",
-    "lint": "biome lint --error-on-warnings"
+    "lint": "biome lint --error-on-warnings",
+    "release": "tsx scripts/release.ts"
   },
   "keywords": [
     "mcp",

@@ -42,6 +42,6 @@ PRs are squash-merged, and the PR title becomes the commit message on `main`. Us
 `refactor:`, `docs:`; `chore:`, `ci:`, `test:`, `build:` and `style:` are left out of the release notes. Mark breaking
 changes with `!` (e.g. `feat!: rename tools`).
 
-To release, run **Actions → Release → Run workflow** on `main` (bump `auto`, or force `patch` / `minor` / `major`) and
-approve the `release` environment. [git-cliff](https://git-cliff.org) (`cliff.toml`) computes the version and the
+To release, run `npm run release` (or `npm run release -- patch|minor|major` to force the bump, e.g. for
+dependency-only releases), or **Actions → Release → Run workflow** on `main`, and approve the `release` environment. [git-cliff](https://git-cliff.org) (`cliff.toml`) computes the version and the
 release notes from the PR titles since the last tag; the workflow publishes to npm and creates the tag and GitHub release.
